@@ -1,10 +1,19 @@
 #!/usr/bin/env ruby
 require "curses"
 Curses.init_screen
+Curses.refresh
 
 class String
   def highlighted
     "#{Out.command "30;47m"}#{self}#{Out.command "0m"}"
+  end
+end
+
+module In
+  class << self
+    def press_any_key
+      Curses.getch
+    end
   end
 end
 
@@ -153,4 +162,4 @@ Out.with_dimensions do |width, height|
   end
 end
 
-sleep 15
+In.press_any_key
