@@ -9,6 +9,25 @@ class String
   end
 end
 
+module Sys
+  class << self
+    def alternate(a, b)
+      loop do
+        break unless a.call
+        break unless b.call
+      end
+    end
+
+    def quit!
+      @quit = true
+    end
+
+    def quit?
+      @quit
+    end
+  end
+end
+
 module In
   class << self
     def press_any_key
@@ -31,6 +50,10 @@ module Out
 
     def beginning!
       write command("1;1H")
+    end
+
+    def middle!(height)
+      write command("#{(height / 2) + 1};1H")
     end
 
     def trim(str, width)
@@ -90,6 +113,7 @@ end
 
 class Files
   include Enumerable
+  attr_accessor :trimmed_winner
   attr_reader :files, :winner, :winner_index
 
   def initialize
@@ -124,6 +148,8 @@ class Files
     files.map! do |f|
       Out.trim f, width
     end
+
+    self.trimmed_winner = Out.trim winner, width
   end
 
   def each(&block)
@@ -160,6 +186,21 @@ Out.with_dimensions do |width, height|
       end
     end
   end
+
+  Thread.new do
+    Sys.alternate lambda {
+      Out.middle! height
+      Out.write files.trimmed_winner.highlighted
+      sleep 0.5
+      !Sys.quit?
+    }, lambda {
+      Out.middle! height
+      Out.write files.trimmed_winner
+      sleep 0.5
+      !Sys.quit?
+    }
+  end
 end
 
 In.press_any_key
+Sys.quit!
