@@ -169,12 +169,30 @@ class Animation
   end
 
   def value
-    instance_exec t, &fn
+    result = instance_exec t, &fn
+    ((last - first) * result).floor
   end
 
   class << self
+    def cubic_bezier(duration, *points)
+      raise "Exactly 4 points required for cubic bezier animation!" unless points.size == 4
+
+      new(duration) do |t|
+        one_minus_t = 1.0 - t
+        a = (one_minus_t ** 3) * points[0].to_f
+        b = 3.0 * (one_minus_t ** 2) * t * points[1].to_f
+        c = 3.0 * one_minus_t * (t ** 2) * points[2].to_f
+        d = (t ** 3) * points[3].to_f
+        a + b + c + d
+      end
+    end
+
+    def ease_out(duration)
+      cubic_bezier duration, 0, 0.99, 0.999, 1.0
+    end
+
     def linear(duration)
-      new(duration) { |t| ((last - first) * t).floor }
+      new(duration) { |t| t }
     end
   end
 end
@@ -203,9 +221,13 @@ class Files
 
   def sliding_window(animation)
     animation.start! 0, size - screen_height
+    last_value = -1
 
     until animation.finished?
-      yield Window.new(self, animation.value, screen_height)
+      value = animation.value
+      next if value == last_value
+      yield Window.new(self, value, screen_height)
+      last_value = value
     end
   end
 
@@ -243,7 +265,7 @@ end
 Out.hide_cursor!
 Out.clear!
 
-files.sliding_window Animation.linear(5) do |window|
+files.sliding_window Animation.ease_out(5) do |window|
   Out.beginning!
 
   window.each do |f|
