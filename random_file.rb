@@ -134,6 +134,51 @@ class Window
   end
 end
 
+class Animation
+  attr_reader :duration, :first, :last, :start_time, :end_time, :fn
+
+  def initialize(duration, &block)
+    @duration = duration.to_f
+    @fn = block
+  end
+
+  def start!(first, last)
+    @first = first
+    @last = last
+    @start_time = now
+    @end_time = @start_time + duration
+  end
+
+  def now
+    Time.now.to_f
+  end
+
+  def finished?
+    @finished
+  end
+
+  def t
+    n = now
+
+    if n >= end_time
+      @finished = true
+      return 1.0
+    end
+
+    (n - start_time) / duration
+  end
+
+  def value
+    instance_exec t, &fn
+  end
+
+  class << self
+    def linear(duration)
+      new(duration) { |t| ((last - first) * t).floor }
+    end
+  end
+end
+
 class Files
   include Enumerable
   attr_accessor :trimmed_winner
@@ -156,9 +201,11 @@ class Files
     files.size
   end
 
-  def sliding_window
-    0.upto size - screen_height do |start|
-      yield Window.new(self, start, screen_height)
+  def sliding_window(animation)
+    animation.start! 0, size - screen_height
+
+    until animation.finished?
+      yield Window.new(self, animation.value, screen_height)
     end
   end
 
@@ -196,7 +243,7 @@ end
 Out.hide_cursor!
 Out.clear!
 
-files.sliding_window do |window|
+files.sliding_window Animation.linear(5) do |window|
   Out.beginning!
 
   window.each do |f|
