@@ -149,6 +149,7 @@ class Files
     @winner = files.sample
     @winner_index = files.index @winner
     trim!
+    adjust_to_winner_window!
   end
 
   def size
@@ -177,6 +178,14 @@ class Files
     end
 
     self.trimmed_winner = Out.trim winner, screen_width
+  end
+
+  def adjust_to_winner_window!
+    first = winner_index - (screen_height / 2)
+    last = first + screen_height - 1
+    split_index = last + 1
+    split_index = split_index % size
+    @files = files[split_index, size - split_index] + files[0, split_index]
   end
 end
 
