@@ -107,6 +107,33 @@ module Git
   end
 end
 
+class Window
+  attr_accessor :index
+  attr_reader :files, :first, :middle, :last
+
+  def initialize(files, first, length)
+    @files = files
+    @first = first
+    @middle = first + (length / 2)
+    @last = first + length - 1
+  end
+
+  def middle?
+    index == middle
+  end
+
+  def last?
+    index == last
+  end
+
+  def each
+    first.upto last do |i|
+      self.index = i
+      yield files[index]
+    end
+  end
+end
+
 class Files
   include Enumerable
   attr_accessor :trimmed_winner
@@ -124,22 +151,13 @@ class Files
     trim!
   end
 
-  def from(beginning, length)
-    middle = beginning + (length / 2)
-    last = beginning + length - 1
-
-    beginning.upto last do |i|
-      yield files[i], i == middle, i == last
-    end
-  end
-
   def size
     files.size
   end
 
   def sliding_window
     0.upto size - screen_height do |start|
-      yield start
+      yield Window.new(self, start, screen_height)
     end
   end
 
@@ -169,15 +187,15 @@ end
 Out.hide_cursor!
 Out.clear!
 
-files.sliding_window do |i|
+files.sliding_window do |window|
   Out.beginning!
 
-  files.from i, files.screen_height do |f, middle, last|
+  window.each do |f|
     Out.clear_line!
 
-    if middle
+    if window.middle?
       Out.puts f.highlighted
-    elsif last
+    elsif window.last?
       Out.write f
     else
       Out.puts f
