@@ -92,10 +92,6 @@ module Out
     def height
       `tput lines`.to_i
     end
-
-    def with_dimensions
-      yield width, height
-    end
   end
 end
 
@@ -114,15 +110,18 @@ end
 class Files
   include Enumerable
   attr_accessor :trimmed_winner
-  attr_reader :files, :winner, :winner_index
+  attr_reader :files, :winner, :winner_index, :screen_width, :screen_height
 
   def initialize
     @files = Git.ls_files.split.select do |f|
       yield f
     end
 
+    @screen_width = Out.width
+    @screen_height = Out.height
     @winner = files.sample
     @winner_index = files.index @winner
+    trim!
   end
 
   def from(beginning, length)
@@ -138,18 +137,10 @@ class Files
     files.size
   end
 
-  def sliding_window(height)
-    0.upto size - height do |start|
+  def sliding_window
+    0.upto size - screen_height do |start|
       yield start
     end
-  end
-
-  def trim!(width)
-    files.map! do |f|
-      Out.trim f, width
-    end
-
-    self.trimmed_winner = Out.trim winner, width
   end
 
   def each(&block)
@@ -158,6 +149,16 @@ class Files
 
   def [](index)
     files[index]
+  end
+
+  private
+
+  def trim!
+    files.map! do |f|
+      Out.trim f, screen_width
+    end
+
+    self.trimmed_winner = Out.trim winner, screen_width
   end
 end
 
@@ -168,38 +169,34 @@ end
 Out.hide_cursor!
 Out.clear!
 
-Out.with_dimensions do |width, height|
-  files.trim! width
+files.sliding_window do |i|
+  Out.beginning!
 
-  files.sliding_window height do |i|
-    Out.beginning!
+  files.from i, files.screen_height do |f, middle, last|
+    Out.clear_line!
 
-    files.from i, height do |f, middle, last|
-      Out.clear_line!
-
-      if middle
-        Out.puts f.highlighted
-      elsif last
-        Out.write f
-      else
-        Out.puts f
-      end
+    if middle
+      Out.puts f.highlighted
+    elsif last
+      Out.write f
+    else
+      Out.puts f
     end
   end
+end
 
-  Thread.new do
-    Sys.alternate lambda {
-      Out.middle! height
-      Out.write files.trimmed_winner.highlighted
-      sleep 0.5
-      !Sys.quit?
-    }, lambda {
-      Out.middle! height
-      Out.write files.trimmed_winner
-      sleep 0.5
-      !Sys.quit?
-    }
-  end
+Thread.new do
+  Sys.alternate lambda {
+    Out.middle! files.screen_height
+    Out.write files.trimmed_winner.highlighted
+    sleep 0.5
+    !Sys.quit?
+  }, lambda {
+    Out.middle! files.screen_height
+    Out.write files.trimmed_winner
+    sleep 0.5
+    !Sys.quit?
+  }
 end
 
 In.press_any_key
