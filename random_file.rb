@@ -183,6 +183,7 @@ class Animation
   class << self
     def bezier(duration, *points)
       n = points.length - 1
+      points.map! &:to_f
 
       new duration do |t|
         # Thanks to http://en.wikipedia.org/wiki/B%C3%A9zier_curve
@@ -195,7 +196,7 @@ class Animation
     end
 
     def ease_out(duration)
-      bezier duration, 0, 0.99, 0.999, 1.0
+      bezier duration, 0, 1, 1, 1
     end
 
     def linear(duration)
