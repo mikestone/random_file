@@ -3,6 +3,13 @@ require "curses"
 Curses.init_screen
 Curses.refresh
 
+class Integer
+  def fact
+    # Thanks to http://stackoverflow.com/a/12415362/122
+    (1..self).inject(:*) || 1
+  end
+end
+
 class String
   def highlighted
     "#{Out.command "30;47m"}#{self}#{Out.command "0m"}"
@@ -174,21 +181,21 @@ class Animation
   end
 
   class << self
-    def cubic_bezier(duration, *points)
-      raise "Exactly 4 points required for cubic bezier animation!" unless points.size == 4
+    def bezier(duration, *points)
+      n = points.length - 1
 
-      new(duration) do |t|
-        one_minus_t = 1.0 - t
-        a = (one_minus_t ** 3) * points[0].to_f
-        b = 3.0 * (one_minus_t ** 2) * t * points[1].to_f
-        c = 3.0 * one_minus_t * (t ** 2) * points[2].to_f
-        d = (t ** 3) * points[3].to_f
-        a + b + c + d
+      new duration do |t|
+        # Thanks to http://en.wikipedia.org/wiki/B%C3%A9zier_curve
+        points.map.with_index do |p, i|
+          (n.fact / (i.fact * (n - i).fact)) * ((1.0 - t) ** (n - i)) * (t ** i) * p
+        end.inject do |sum, x|
+          sum + x
+        end
       end
     end
 
     def ease_out(duration)
-      cubic_bezier duration, 0, 0.99, 0.999, 1.0
+      bezier duration, 0, 0.99, 0.999, 1.0
     end
 
     def linear(duration)
