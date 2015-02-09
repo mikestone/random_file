@@ -59,11 +59,14 @@ module Out
       write command("1;1H")
     end
 
-    def middle!(height)
+    def middle!(height = nil)
+      height ||= self.height
       write command("#{(height / 2) + 1};1H")
     end
 
-    def trim(str, width)
+    def trim(str, width = nil)
+      width ||= self.width
+
       if str.length > width
         "#{str[0, width - 3]}..."
       else
@@ -93,11 +96,11 @@ module Out
     end
 
     def width
-      `tput cols`.to_i
+      @width ||= `tput cols`.to_i
     end
 
     def height
-      `tput lines`.to_i
+      @height ||= `tput lines`.to_i
     end
   end
 end
@@ -116,10 +119,10 @@ end
 
 class Window
   attr_accessor :index
-  attr_reader :files, :first, :middle, :last
+  attr_reader :values, :first, :middle, :last
 
-  def initialize(files, first, length)
-    @files = files
+  def initialize(values, first, length)
+    @values = values
     @first = first
     @middle = first + (length / 2)
     @last = first + length - 1
@@ -136,7 +139,7 @@ class Window
   def each
     first.upto last do |i|
       self.index = i
-      yield files[index]
+      yield values[index]
     end
   end
 end
@@ -205,75 +208,57 @@ class Animation
   end
 end
 
-class Files
-  include Enumerable
-  attr_accessor :trimmed_winner
-  attr_reader :files, :winner, :winner_index, :screen_width, :screen_height
+class Spinner
+  attr_reader :values, :winner, :trimmed_winner
 
-  def initialize
-    @files = Git.ls_files.split.select do |f|
-      yield f
-    end
-
-    @screen_width = Out.width
-    @screen_height = Out.height
-    @winner = files.sample
-    @winner_index = files.index @winner
-    trim!
-    adjust_to_winner_window!
+  def initialize(values)
+    @values = values
+    @winner = values.sample
+    center_last_winner_on_winner!
+    trim_for_screen!
   end
 
-  def size
-    files.size
-  end
-
-  def sliding_window(animation)
-    animation.start! 0, size - screen_height
+  def spin(animation)
+    animation.start! 0, values.size - Out.height
     last_value = -1
 
     until animation.finished?
       value = animation.value
       next if value == last_value
-      yield Window.new(self, value, screen_height)
+      yield Window.new(values, value, Out.height)
       last_value = value
     end
   end
 
-  def each(&block)
-    files.each &block
-  end
-
-  def [](index)
-    files[index]
-  end
-
   private
 
-  def trim!
-    files.map! do |f|
-      Out.trim f, screen_width
+  def trim_for_screen!
+    values.map! do |f|
+      Out.trim f
     end
 
-    self.trimmed_winner = Out.trim winner, screen_width
+    @trimmed_winner = Out.trim winner
   end
 
-  def adjust_to_winner_window!
-    first = winner_index - (screen_height / 2)
-    last = first + screen_height - 1
+  def center_last_winner_on_winner!
+    index = values.index winner
+    first = index - (Out.height / 2)
+    last = first + Out.height - 1
     split_index = last + 1
-    split_index = split_index % size
-    @files = files[split_index, size - split_index] + files[0, split_index]
+    split_index = split_index % values.size
+    @values = values[split_index, values.size - split_index] + values[0, split_index]
   end
 end
 
-files = Files.new do |f|
+files = Git.ls_files.split.select do |f|
   f =~ /\.rb$/
 end
 
 Out.hide_cursor!
 Out.clear!
+spinner = Spinner.new files
 
-files.sliding_window Animation.ease_out(5) do |window|
+spinner.spin Animation.ease_out(5) do |window|
   Out.beginning!
 
   window.each do |f|
@@ -291,13 +276,13 @@ end
 
 Thread.new do
   Sys.alternate lambda {
-    Out.middle! files.screen_height
-    Out.write files.trimmed_winner.highlighted
+    Out.middle!
+    Out.write spinner.trimmed_winner.highlighted
     sleep 0.5
     !Sys.quit?
   }, lambda {
-    Out.middle! files.screen_height
-    Out.write files.trimmed_winner
+    Out.middle!
+    Out.write spinner.trimmed_winner
     sleep 0.5
     !Sys.quit?
   }
