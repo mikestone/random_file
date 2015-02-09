@@ -24,14 +24,6 @@ module Sys
         break unless b.call
       end
     end
-
-    def quit!
-      @quit = true
-    end
-
-    def quit?
-      @quit
-    end
   end
 end
 
@@ -225,25 +217,19 @@ class Animation
 end
 
 class Spinner
-  attr_reader :values, :winner, :trimmed_winner
+  attr_reader :values, :animation, :winner, :trimmed_winner
 
-  def initialize(values)
+  def initialize(values, animation)
     @values = values
+    @animation = animation
     @winner = values.sample
     center_last_winner_on_winner!
     trim_for_screen!
   end
 
-  def spin(animation)
-    animation.start! 0, values.size - Out.height
-    last_value = -1
-
-    until animation.finished?
-      value = animation.value
-      next if value == last_value
-      Window.new(values, value).draw
-      last_value = value
-    end
+  def spin
+    play_animation
+    wait_for_key_press
   end
 
   private
@@ -264,6 +250,37 @@ class Spinner
     split_index = split_index % values.size
     @values = values[split_index, values.size - split_index] + values[0, split_index]
   end
+
+  def play_animation
+    animation.start! 0, values.size - Out.height
+    last_value = -1
+
+    until animation.finished?
+      value = animation.value
+      next if value == last_value
+      Window.new(values, value).draw
+      last_value = value
+    end
+  end
+
+  def wait_for_key_press
+    Thread.new do
+      Sys.alternate lambda {
+        Out.middle!
+        Out.write trimmed_winner.highlighted
+        sleep 0.5
+        !@pressed
+      }, lambda {
+        Out.middle!
+        Out.write trimmed_winner
+        sleep 0.5
+        !@pressed
+      }
+    end
+
+    In.press_any_key
+    @pressed = true
+  end
 end
 
 files = Git.ls_files.split.select do |f|
@@ -272,22 +289,5 @@ end
 
 Out.hide_cursor!
 Out.clear!
-spinner = Spinner.new files
-spinner.spin Animation.ease_out(5)
-
-Thread.new do
-  Sys.alternate lambda {
-    Out.middle!
-    Out.write spinner.trimmed_winner.highlighted
-    sleep 0.5
-    !Sys.quit?
-  }, lambda {
-    Out.middle!
-    Out.write spinner.trimmed_winner
-    sleep 0.5
-    !Sys.quit?
-  }
-end
-
-In.press_any_key
-Sys.quit!
+spinner = Spinner.new files, Animation.ease_out(5)
+spinner.spin
