@@ -121,11 +121,11 @@ class Window
   attr_accessor :index
   attr_reader :values, :first, :middle, :last
 
-  def initialize(values, first, length)
+  def initialize(values, first)
     @values = values
     @first = first
-    @middle = first + (length / 2)
-    @last = first + length - 1
+    @middle = first + (Out.height / 2)
+    @last = first + Out.height - 1
   end
 
   def middle?
@@ -134,6 +134,22 @@ class Window
 
   def last?
     index == last
+  end
+
+  def draw
+    Out.beginning!
+
+    each do |value|
+      Out.clear_line!
+
+      if middle?
+        Out.puts value.highlighted
+      elsif last?
+        Out.write value
+      else
+        Out.puts value
+      end
+    end
   end
 
   def each
@@ -225,7 +241,7 @@ class Spinner
     until animation.finished?
       value = animation.value
       next if value == last_value
-      yield Window.new(values, value, Out.height)
+      Window.new(values, value).draw
       last_value = value
     end
   end
@@ -257,22 +273,7 @@ end
 Out.hide_cursor!
 Out.clear!
 spinner = Spinner.new files
-
-spinner.spin Animation.ease_out(5) do |window|
-  Out.beginning!
-
-  window.each do |f|
-    Out.clear_line!
-
-    if window.middle?
-      Out.puts f.highlighted
-    elsif window.last?
-      Out.write f
-    else
-      Out.puts f
-    end
-  end
-end
+spinner.spin Animation.ease_out(5)
 
 Thread.new do
   Sys.alternate lambda {
